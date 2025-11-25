@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QHeader
 from PyQt6.QtCore import Qt
 
 
+
 class CoffeeApp(QMainWindow):
     def __init__(self):
         super().__init__()
