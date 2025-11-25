@@ -1,73 +1,36 @@
 import sys
+import os
 import sqlite3
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidgetItem, 
-                           QHeaderView, QMessageBox, Qdig, QVBoxLayout,
-                           QHBoxLayout, QLabel, QLineEdit, QComboBox, 
-                           QTextEdit, QPushButton, QFormLayout, QWidget,
-                           QTableWidget)
+                           QHeaderView, QMessageBox, QDialog)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDoubleValidator
 
-class AddEditCoffeeForm(Qdig):
+from UI.main_ui import Ui_MainWindow
+from UI.addEditCoffeeForm import Ui_Dialog
+
+def get_resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
+def get_database_path():
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    
+    return os.path.join(base_path, 'data', 'coffee.sqlite')
+
+class AddEditCoffeeForm(QDialog, Ui_Dialog):
     def __init__(self, parent=None, coffee_id=None):
         super().__init__(parent)
+        self.setupUi(self)
         self.coffee_id = coffee_id
-        self.setup_ui()
-        
-    def setup_ui(self):
-        self.setWindowTitle("Добавление/Редактирование кофе")
-        self.setFixedSize(500, 400)
-        
-        layout = QVBoxLayout(self)
-        
-        form_layout = QFormLayout()
-        
-        self.nameEdit = QLineEdit()
-        self.nameEdit.setPlaceholderText("Введите название кофе")
-        form_layout.addRow("Название сорта:", self.nameEdit)
-        
-        self.roastCombo = QComboBox()
-        self.roastCombo.addItems(["Светлая", "Средняя", "Темная"])
-        form_layout.addRow("Степень обжарки:", self.roastCombo)
-        
-        self.typeCombo = QComboBox()
-        self.typeCombo.addItems(["Зерна", "Молотый"])
-        form_layout.addRow("Тип:", self.typeCombo)
-        
-        self.priceEdit = QLineEdit()
-        self.priceEdit.setPlaceholderText("0.00")
-        price_validator = QDoubleValidator()
-        price_validator.setBottom(0)
-        self.priceEdit.setValidator(price_validator)
-        form_layout.addRow("Цена (руб):", self.priceEdit)
-        
-        self.volumeEdit = QLineEdit()
-        self.volumeEdit.setPlaceholderText("0")
-        volume_validator = QDoubleValidator()
-        volume_validator.setBottom(0)
-        self.volumeEdit.setValidator(volume_validator)
-        form_layout.addRow("Объем упаковки (г):", self.volumeEdit)
-        
-        self.descriptionEdit = QTextEdit()
-        self.descriptionEdit.setMaximumHeight(80)
-        self.descriptionEdit.setPlaceholderText("Описание вкусовых характеристик")
-        form_layout.addRow("Описание вкуса:", self.descriptionEdit)
-        
-        layout.addLayout(form_layout)
-        
-        button_layout = QHBoxLayout()
-        
-        self.cancelButton = QPushButton("Отмена")
-        self.cancelButton.clicked.connect(self.reject)
-        
-        self.saveButton = QPushButton("Сохранить")
-        self.saveButton.clicked.connect(self.accept)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(self.cancelButton)
-        button_layout.addWidget(self.saveButton)
-        
-        layout.addLayout(button_layout)
+        self.setup_validators()
         
         if self.coffee_id:
             self.load_coffee_data()
@@ -75,9 +38,24 @@ class AddEditCoffeeForm(Qdig):
         else:
             self.setWindowTitle("Добавление нового кофе")
             
+        self.cancelButton.clicked.connect(self.reject)
+        self.saveButton.clicked.connect(self.accept)
+        
+    def setup_validators(self):
+        price_validator = QDoubleValidator()
+        price_validator.setBottom(0)
+        self.priceEdit.setValidator(price_validator)
+        
+        volume_validator = QDoubleValidator()
+        volume_validator.setBottom(0)
+        self.volumeEdit.setValidator(volume_validator)
+            
     def load_coffee_data(self):
         try:
-            conn = sqlite3.connect('coffee.sqlite')
+            db_path = get_database_path()
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            
+            conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM coffee WHERE id = ?", (self.coffee_id,))
             coffee_data = cursor.fetchone()
@@ -115,87 +93,19 @@ class AddEditCoffeeForm(Qdig):
             return False
         return True
 
-class CoffeeApp(QMainWindow):
+class CoffeeApp(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Каталог кофе")
+        self.setupUi(self)
         self.setup_ui()
         self.load_data()
         
     def setup_ui(self):
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        layout = QVBoxLayout(central_widget)
-        
-        title_label = QLabel("Каталог кофе")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("font-size: 16pt; font-weight: bold; color: #8B4513; margin: 10px;")
-        layout.addWidget(title_label)
-        
-        button_layout = QHBoxLayout()
-        
-        self.addButton = QPushButton("Добавить кофе")
         self.addButton.clicked.connect(self.add_coffee)
-        
-        self.editButton = QPushButton("Редактировать")
         self.editButton.clicked.connect(self.edit_coffee)
-        self.editButton.setEnabled(False)
-        
-        self.deleteButton = QPushButton("Удалить")
         self.deleteButton.clicked.connect(self.delete_coffee)
-        self.deleteButton.setEnabled(False)
-        
-        button_layout.addWidget(self.addButton)
-        button_layout.addWidget(self.editButton)
-        button_layout.addWidget(self.deleteButton)
-        button_layout.addStretch()
-        
-        layout.addLayout(button_layout)
-        
-        self.tableWidget = QTableWidget()
-        self.tableWidget.setAlternatingRowColors(True)
-        self.tableWidget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.tableWidget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.tableWidget.setSortingEnabled(True)
         self.tableWidget.itemSelectionChanged.connect(self.on_selection_changed)
-        
-        layout.addWidget(self.tableWidget)
-        
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            QTableWidget {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                gridline-color: #e0e0e0;
-                alternate-background-color: #f8f8f8;
-            }
-            QHeaderView::section {
-                background-color: #8B4513;
-                color: white;
-                padding: 8px;
-                border: none;
-                font-weight: bold;
-            }
-            QPushButton {
-                background-color: #8B4513;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #A0522D;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-        """)
+        self.on_selection_changed()
         
     def on_selection_changed(self):
         has_selection = len(self.tableWidget.selectedItems()) > 0
@@ -203,60 +113,101 @@ class CoffeeApp(QMainWindow):
         self.deleteButton.setEnabled(has_selection)
         
     def load_data(self):
-        conn = sqlite3.connect('coffee.sqlite')
-        cursor = conn.cursor()
+        try:
+            db_path = get_database_path()
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS coffee (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                roast_degree TEXT NOT NULL,
+                type TEXT NOT NULL,
+                description TEXT,
+                price REAL NOT NULL,
+                volume REAL NOT NULL
+            )
+            ''')
+            
+            cursor.execute("SELECT * FROM coffee")
+            data = cursor.fetchall()
+            
+            if not data:
+                self.initialize_sample_data(cursor)
+                conn.commit()
+                cursor.execute("SELECT * FROM coffee")
+                data = cursor.fetchall()
+            
+            self.tableWidget.setRowCount(len(data))
+            self.tableWidget.setColumnCount(7)
+            self.tableWidget.setHorizontalHeaderLabels([
+                'ID', 'Название сорта', 'Степень обжарки', 'Молотый/в зернах', 
+                'Описание вкуса', 'Цена (руб)', 'Объем упаковки (г)'
+            ])
+            
+            for row_num, row_data in enumerate(data):
+                for col_num, col_data in enumerate(row_data):
+                    item = QTableWidgetItem(str(col_data))
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    item.setForeground(Qt.GlobalColor.black)
+                    self.tableWidget.setItem(row_num, col_num, item)
+            
+            header = self.tableWidget.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+            header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+            
+            self.tableWidget.verticalHeader().setDefaultSectionSize(40)
+            conn.close()
+            
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка базы данных: {e}")
+    
+    def initialize_sample_data(self, cursor):
+        coffee_data = [
+            ('Эфиопия Иргачефф', 'Средняя', 'Зерна', 'Цветочные и цитрусовые ноты с яркой кислотностью', 1250.0, 250.0),
+            ('Колумбия Супремо', 'Темная', 'Молотый', 'Шоколадный вкус с ореховыми нотами', 980.0, 250.0),
+            ('Кения АА', 'Светлая', 'Зерна', 'Ягодные тона с винным послевкусием', 1450.0, 200.0),
+            ('Бразилия Сантос', 'Средняя', 'Молотый', 'Ореховый вкус с сладким карамельным послевкусием', 850.0, 500.0),
+            ('Гватемала Антивей', 'Темная', 'Зерна', 'Дымный аромат с пряными нотами', 1100.0, 300.0),
+            ('Эспрессо Бленд', 'Темная', 'Молотый', 'Сбалансированный вкус для эспрессо', 920.0, 400.0),
+            ('Коста Рика Тарразу', 'Средняя', 'Зерна', 'Яркий вкус с нотками карамели и орехов', 1350.0, 250.0)
+        ]
         
-        cursor.execute("SELECT * FROM coffee")
-        data = cursor.fetchall()
-        
-        self.tableWidget.setRowCount(len(data))
-        self.tableWidget.setColumnCount(7)
-        self.tableWidget.setHorizontalHeaderLabels([
-            'ID', 'Название сорта', 'Степень обжарки', 'Молотый/в зернах', 
-            'Описание вкуса', 'Цена (руб)', 'Объем упаковки (г)'
-        ])
-        
-        for rw_nm, data in enumerate(data):
-            for col_num, col_data in enumerate(data):
-                item = QTableWidgetItem(str(col_data))
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                item.setForeground(Qt.GlobalColor.black)
-                self.tableWidget.setItem(rw_nm, col_num, item)
-        
-        header = self.tableWidget.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        
-        self.tableWidget.verticalHeader().setDefaultSectionSize(40)
-        conn.close()
-                
+        cursor.executemany('''
+        INSERT INTO coffee (name, roast_degree, type, description, price, volume)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', coffee_data)
+    
     def add_coffee(self):
-        dig = AddEditCoffeeForm(self)
-        if dig.exec() == Qdig.digCode.Accepted:
-            data = dig.get_data()
-            if dig.validate_data(data):
+        dialog = AddEditCoffeeForm(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if dialog.validate_data(data):
                 self.save_coffee(data)
     
     def edit_coffee(self):
-        rw = self.tableWidget.currentRow()
-        if rw >= 0:
-            coffee_id = int(self.tableWidget.item(rw, 0).text())
-            dig = AddEditCoffeeForm(self, coffee_id)
-            if dig.exec() == Qdig.digCode.Accepted:
-                data = dig.get_data()
-                if dig.validate_data(data):
+        selected_row = self.tableWidget.currentRow()
+        if selected_row >= 0:
+            coffee_id = int(self.tableWidget.item(selected_row, 0).text())
+            dialog = AddEditCoffeeForm(self, coffee_id)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                data = dialog.get_data()
+                if dialog.validate_data(data):
                     self.save_coffee(data, coffee_id)
     
     def delete_coffee(self):
-        rw = self.tableWidget.currentRow()
-        if rw >= 0:
-            coffee_id = int(self.tableWidget.item(rw, 0).text())
-            coffee_name = self.tableWidget.item(rw, 1).text()
+        selected_row = self.tableWidget.currentRow()
+        if selected_row >= 0:
+            coffee_id = int(self.tableWidget.item(selected_row, 0).text())
+            coffee_name = self.tableWidget.item(selected_row, 1).text()
             
             reply = QMessageBox.question(
                 self, 
@@ -267,7 +218,8 @@ class CoffeeApp(QMainWindow):
             
             if reply == QMessageBox.StandardButton.Yes:
                 try:
-                    conn = sqlite3.connect('coffee.sqlite')
+                    db_path = get_database_path()
+                    conn = sqlite3.connect(db_path)
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM coffee WHERE id = ?", (coffee_id,))
                     conn.commit()
@@ -278,34 +230,37 @@ class CoffeeApp(QMainWindow):
                     QMessageBox.critical(self, "Ошибка", f"Ошибка удаления: {e}")
     
     def save_coffee(self, data, coffee_id=None):
-        conn = sqlite3.connect('coffee.sqlite')
-        cursor = conn.cursor()
-        
-        if coffee_id:
-            cursor.execute('''
-                UPDATE coffee 
-                SET name=?, roast_degree=?, type=?, description=?, price=?, volume=?
-                WHERE id=?
-            ''', (data['name'], data['roast_degree'], data['type'], 
-                    data['description'], float(data['price']), float(data['volume']), coffee_id))
-            message = "Кофе обновлен успешно"
-        else:
-            cursor.execute('''
-                INSERT INTO coffee (name, roast_degree, type, description, price, volume)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (data['name'], data['roast_degree'], data['type'], 
-                    data['description'], float(data['price']), float(data['volume'])))
-            message = "Кофе добавлен успешно"
-        
-        conn.commit()
-        conn.close()
-        self.load_data()
-        QMessageBox.information(self, "Успех", message)
+        try:
+            db_path = get_database_path()
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
             
+            if coffee_id:
+                cursor.execute('''
+                    UPDATE coffee 
+                    SET name=?, roast_degree=?, type=?, description=?, price=?, volume=?
+                    WHERE id=?
+                ''', (data['name'], data['roast_degree'], data['type'], 
+                      data['description'], float(data['price']), float(data['volume']), coffee_id))
+                message = "Кофе обновлен успешно"
+            else:
+                cursor.execute('''
+                    INSERT INTO coffee (name, roast_degree, type, description, price, volume)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (data['name'], data['roast_degree'], data['type'], 
+                      data['description'], float(data['price']), float(data['volume'])))
+                message = "Кофе добавлен успешно"
+            
+            conn.commit()
+            conn.close()
+            self.load_data()
+            QMessageBox.information(self, "Успех", message)
+            
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка сохранения: {e}")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = CoffeeApp()
-    window.resize(1200, 700)
     window.show()
     sys.exit(app.exec())

@@ -1,6 +1,20 @@
 import sqlite3
+import os
+import sys
 
-conn = sqlite3.connect('coffee.sqlite')
+def get_database_path():
+    if getattr(sys, 'frozen', False):
+        # Если запущено как exe
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    
+    return os.path.join(base_path, 'data', 'coffee.sqlite')
+
+db_path = get_database_path()
+os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 cursor.execute('''
